@@ -621,7 +621,7 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
 }
 
 const s = {
-  root: { display: "flex", flexDirection: "column", height: "100dvh", fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", maxWidth: 430, margin: "0 auto" },
+  root: { display: "flex", flexDirection: "column", height: "100dvh", width: "100vw", fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif", maxWidth: 430, margin: "0 auto", overflowX: "hidden" },
   screen: { flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" },
   tabBar: { height: 80, background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "space-around", alignItems: "flex-start", paddingTop: 10, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" },
   tabButton: { display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", cursor: "pointer", gap: 3, padding: "0 20px" },
