@@ -14,43 +14,37 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 const ADMIN_PASSWORD = "1234";
+const GOOGLE_KEY = process.env.REACT_APP_GOOGLE_KEY;
 
 // ── Translation cache & helper ──────────────────────────────────────────────
-const translationCache = {};
+const cache = {};
 
 async function translateText(text, targetLang) {
   if (!text || targetLang === "pt") return text;
   const key = `${targetLang}::${text}`;
-  if (translationCache[key]) return translationCache[key];
+  if (cache[key]) return cache[key];
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const url = `https://translation.googleapis.com/language/translate/v2?key=${GOOGLE_KEY}`;
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: `Translate the following text to English. Return ONLY the translated text, nothing else, no explanations:\n\n${text}`
-        }]
-      })
+      body: JSON.stringify({ q: text, source: "pt", target: targetLang, format: "text" })
     });
     const data = await res.json();
-    const translated = data?.content?.[0]?.text?.trim() || text;
-    translationCache[key] = translated;
+    const translated = data?.data?.translations?.[0]?.translatedText || text;
+    cache[key] = translated;
     return translated;
   } catch {
     return text;
   }
 }
 
-async function translateMessage(msg, lang) {
-  if (lang === "pt") return msg;
-  const [title, content] = await Promise.all([
-    translateText(msg.title, lang),
-    translateText(msg.content, lang),
-  ]);
-  return { ...msg, title, content };
+async function translateObj(obj, fields, lang) {
+  if (lang === "pt") return obj;
+  const results = await Promise.all(fields.map(f => translateText(obj[f], lang)));
+  const updated = { ...obj };
+  fields.forEach((f, i) => { updated[f] = results[i]; });
+  return updated;
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -66,16 +60,10 @@ const defaultAuthor = {
 };
 
 const defaultAppearance = {
-  appName: "IE & Liderança",
-  appSubtitle: "Inteligência Emocional & Soft Skills",
-  appIcon: "🧠",
-  footerText: "Inteligência Emocional & Liderança",
-  colorPrimary: "#1E3A5F",
-  colorSecondary: "#2E6DA4",
-  bgColor: "#F0F4F8",
-  showFooter: true,
-  showSubtitle: true,
-  gridCols: 2,
+  appName: "IE & Liderança", appSubtitle: "Inteligência Emocional & Soft Skills",
+  appIcon: "🧠", footerText: "Inteligência Emocional & Liderança",
+  colorPrimary: "#1E3A5F", colorSecondary: "#2E6DA4", bgColor: "#F0F4F8",
+  showFooter: true, showSubtitle: true, gridCols: 2,
 };
 
 const defaultCategories = [
@@ -92,33 +80,33 @@ const iconOptions = ["💡","🎯","🧠","❤️","🤝","🔥","🌈","⭐","�
 const appIconOptions = ["🧠","💡","❤️","🌟","🎯","🔥","🤝","🌱","⚡","🏆"];
 
 const ui = {
-  pt: {
-    home: "Início", author: "Autor", admin: "Admin",
-    all: "Todas", loading: "⏳ Carregando...", noMessages: "Nenhuma mensagem ainda.",
-    addFirst: "Toque em + para adicionar!", newMessage: "Nova Mensagem",
-    editMessage: "✏️ Editar Mensagem", title: "Título", content: "Conteúdo...",
+  pt: { home: "Início", author: "Autor", admin: "Admin", all: "Todas",
+    loading: "⏳ Carregando...", translating: "⟳ Traduzindo...",
+    noMessages: "Nenhuma mensagem ainda.", addFirst: "Toque em + para adicionar!",
+    newMessage: "Nova Mensagem", editMessage: "✏️ Editar Mensagem",
+    titleLabel: "Título", contentLabel: "Conteúdo...",
     save: "Salvar Mensagem", saveEdit: "Salvar Alterações",
     reflect: "💭 Reflita sobre isso", reflectSub: "Como você pode aplicar essa ideia no seu dia a dia?",
     back: "← Voltar", about: "Sobre", mission: "Missão",
-    adminTitle: "⚙️ Painel Admin", adminSub: "Edite o conteúdo do app", logout: "Sair",
-    password: "Área Administrativa", passwordSub: "Digite a senha para continuar",
-    enter: "Entrar", wrongPassword: "Senha incorreta.",
-    categories: "🏷️ Categorias", appearance: "🎨 Aparência", messages: "💬 Mensagens",
-    years: "Anos de Experiência",
+    adminTitle: "⚙️ Painel Admin", adminSub: "Edite o conteúdo do app",
+    logout: "Sair", passwordTitle: "Área Administrativa",
+    passwordSub: "Digite a senha para continuar", enter: "Entrar",
+    wrongPass: "Senha incorreta.", categories: "🏷️ Categorias",
+    appearance: "🎨 Aparência", messages: "💬 Mensagens",
   },
-  en: {
-    home: "Home", author: "Author", admin: "Admin",
-    all: "All", loading: "⏳ Loading...", noMessages: "No messages yet.",
-    addFirst: "Tap + to add!", newMessage: "New Message",
-    editMessage: "✏️ Edit Message", title: "Title", content: "Content...",
+  en: { home: "Home", author: "Author", admin: "Admin", all: "All",
+    loading: "⏳ Loading...", translating: "⟳ Translating...",
+    noMessages: "No messages yet.", addFirst: "Tap + to add!",
+    newMessage: "New Message", editMessage: "✏️ Edit Message",
+    titleLabel: "Title", contentLabel: "Content...",
     save: "Save Message", saveEdit: "Save Changes",
     reflect: "💭 Reflect on this", reflectSub: "How can you apply this idea in your daily life?",
     back: "← Back", about: "About", mission: "Mission",
-    adminTitle: "⚙️ Admin Panel", adminSub: "Edit app content", logout: "Logout",
-    password: "Admin Area", passwordSub: "Enter password to continue",
-    enter: "Enter", wrongPassword: "Incorrect password.",
-    categories: "🏷️ Categories", appearance: "🎨 Appearance", messages: "💬 Messages",
-    years: "Years of Experience",
+    adminTitle: "⚙️ Admin Panel", adminSub: "Edit app content",
+    logout: "Logout", passwordTitle: "Admin Area",
+    passwordSub: "Enter password to continue", enter: "Enter",
+    wrongPass: "Incorrect password.", categories: "🏷️ Categories",
+    appearance: "🎨 Appearance", messages: "💬 Messages",
   }
 };
 
@@ -137,16 +125,15 @@ export default function App() {
   const [editingMessage, setEditingMessage] = useState(null);
   const [lang, setLang] = useState("pt");
   const [translatedMessages, setTranslatedMessages] = useState([]);
-  const [translating, setTranslating] = useState(false);
   const [translatedAuthor, setTranslatedAuthor] = useState(null);
+  const [translatedCats, setTranslatedCats] = useState(null);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "messages"), orderBy("createdAt", "desc"));
     return onSnapshot(q, (snap) => {
       const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setMessages(msgs);
-      setTranslatedMessages(msgs);
-      setLoading(false);
+      setMessages(msgs); setTranslatedMessages(msgs); setLoading(false);
     });
   }, []);
 
@@ -174,39 +161,35 @@ export default function App() {
     if (newLang === "pt") {
       setTranslatedMessages(messages);
       setTranslatedAuthor(null);
+      setTranslatedCats(null);
       return;
     }
     setTranslating(true);
     try {
-      const [tMsgs, tTitle, tBio, tMission, tStat1, tStat2, tStat3] = await Promise.all([
-        Promise.all(messages.map(m => translateMessage(m, newLang))),
-        translateText(author.title, newLang),
-        translateText(author.bio, newLang),
-        translateText(author.mission, newLang),
-        translateText(author.stat1Label, newLang),
-        translateText(author.stat2Label, newLang),
-        translateText(author.stat3Label, newLang),
+      const [tMsgs, tAuthor, tCats] = await Promise.all([
+        Promise.all(messages.map(m => translateObj(m, ["title", "content"], newLang))),
+        translateObj(author, ["title", "bio", "mission", "stat1Label", "stat2Label", "stat3Label"], newLang),
+        Promise.all(categories.map(c => translateObj(c, ["label"], newLang))),
       ]);
       setTranslatedMessages(tMsgs);
-      setTranslatedAuthor({
-        ...author,
-        title: tTitle, bio: tBio, mission: tMission,
-        stat1Label: tStat1, stat2Label: tStat2, stat3Label: tStat3,
-      });
+      setTranslatedAuthor(tAuthor);
+      setTranslatedCats(tCats);
     } finally {
       setTranslating(false);
     }
-  }, [lang, messages, author]);
+  }, [lang, messages, author, categories]);
 
   const displayMessages = lang === "pt" ? messages : translatedMessages;
   const displayAuthor = lang === "pt" ? author : (translatedAuthor || author);
+  const displayCats = lang === "pt" ? categories : (translatedCats || categories);
   const t = ui[lang];
-  const activeCats = categories.filter(c => c.active !== false);
-  const getCat = (id) => categories.find(c => c.id === id) || { label: id, color: "#999" };
+  const activeCats = displayCats.filter(c => c.active !== false);
+  const getCat = (id) => displayCats.find(c => c.id === id) || categories.find(c => c.id === id) || { label: id, color: "#999" };
+  const grad = `linear-gradient(135deg, ${appearance.colorPrimary}, ${appearance.colorSecondary})`;
 
   const handleAddMessage = async () => {
     if (!newMsg.title || !newMsg.content) return;
-    const cat = getCat(newMsg.category);
+    const cat = categories.find(c => c.id === newMsg.category) || { color: "#999" };
     if (editingMessage) {
       await updateDoc(doc(db, "messages", editingMessage.id), { ...newMsg, color: cat.color });
       setEditingMessage(null);
@@ -219,29 +202,20 @@ export default function App() {
 
   const handleDelete = async (id) => {
     await deleteDoc(doc(db, "messages", id));
-    setSelectedMessage(null);
-    setScreen("home");
+    setSelectedMessage(null); setScreen("home");
   };
 
   const handleEditMessage = (msg) => {
     setEditingMessage(msg);
     setNewMsg({ title: msg.title, content: msg.content, category: msg.category, icon: msg.icon });
-    setShowAddForm(true);
-    setScreen("home");
+    setShowAddForm(true); setScreen("home");
   };
 
-  const grad = `linear-gradient(135deg, ${appearance.colorPrimary}, ${appearance.colorSecondary})`;
-
-  // Language switcher widget
   const LangSwitcher = () => (
     <div style={s.langSwitcher}>
-      <button onClick={() => switchLang("pt")} style={{ ...s.langBtn, opacity: lang === "pt" ? 1 : 0.45, transform: lang === "pt" ? "scale(1.15)" : "scale(1)" }} title="Português">
-        🇧🇷
-      </button>
-      <button onClick={() => switchLang("en")} style={{ ...s.langBtn, opacity: lang === "en" ? 1 : 0.45, transform: lang === "en" ? "scale(1.15)" : "scale(1)" }} title="English">
-        🇺🇸
-      </button>
-      {translating && <span style={s.translatingDot}>⟳</span>}
+      <button onClick={() => switchLang("pt")} style={{ ...s.langBtn, opacity: lang === "pt" ? 1 : 0.4, transform: lang === "pt" ? "scale(1.2)" : "scale(1)" }}>🇧🇷</button>
+      <button onClick={() => switchLang("en")} style={{ ...s.langBtn, opacity: lang === "en" ? 1 : 0.4, transform: lang === "en" ? "scale(1.2)" : "scale(1)" }}>🇺🇸</button>
+      {translating && <span style={{ fontSize: 13, color: "#6B7280" }}>⟳</span>}
     </div>
   );
 
@@ -249,34 +223,33 @@ export default function App() {
     <div style={{ ...s.root, background: appearance.bgColor }}>
       <div style={s.screen}>
         {screen === "home" && (
-          <HomeScreen messages={displayMessages} loading={loading} activeTab={activeTab}
-            setActiveTab={setActiveTab} setScreen={setScreen} setSelectedMessage={setSelectedMessage}
-            showAddForm={showAddForm} setShowAddForm={setShowAddForm}
-            newMsg={newMsg} setNewMsg={setNewMsg} handleAddMessage={handleAddMessage}
-            editingMessage={editingMessage} setEditingMessage={setEditingMessage}
-            appearance={appearance} grad={grad} activeCats={activeCats} getCat={getCat}
-            t={t} LangSwitcher={LangSwitcher} translating={translating} />
+          <HomeScreen messages={displayMessages} loading={loading} translating={translating}
+            activeTab={activeTab} setActiveTab={setActiveTab} setScreen={setScreen}
+            setSelectedMessage={setSelectedMessage} showAddForm={showAddForm}
+            setShowAddForm={setShowAddForm} newMsg={newMsg} setNewMsg={setNewMsg}
+            handleAddMessage={handleAddMessage} editingMessage={editingMessage}
+            setEditingMessage={setEditingMessage} appearance={appearance} grad={grad}
+            activeCats={activeCats} getCat={getCat} t={t} LangSwitcher={LangSwitcher} />
         )}
         {screen === "author" && <AuthorScreen author={displayAuthor} grad={grad} appearance={appearance} t={t} LangSwitcher={LangSwitcher} />}
         {screen === "detail" && selectedMessage && (
           <DetailScreen message={selectedMessage} setScreen={setScreen}
             handleDelete={handleDelete} handleEditMessage={handleEditMessage}
-            isAdmin={isAdmin} appearance={appearance} grad={grad} getCat={getCat} t={t}
-            displayMessages={displayMessages} />
+            isAdmin={isAdmin} appearance={appearance} grad={grad} getCat={getCat}
+            t={t} displayMessages={displayMessages} />
         )}
         {screen === "admin" && (
-          <AdminScreen isAdmin={isAdmin} setIsAdmin={setIsAdmin}
-            author={author} appearance={appearance} categories={categories}
-            messages={messages} handleDelete={handleDelete} handleEditMessage={handleEditMessage}
-            grad={grad} activeCats={activeCats} getCat={getCat} t={t} />
+          <AdminScreen isAdmin={isAdmin} setIsAdmin={setIsAdmin} author={author}
+            appearance={appearance} categories={categories} messages={messages}
+            handleDelete={handleDelete} handleEditMessage={handleEditMessage}
+            grad={grad} activeCats={categories.filter(c => c.active !== false)}
+            getCat={(id) => categories.find(c => c.id === id) || { label: id, color: "#999" }} t={t} />
         )}
       </div>
       <div style={s.tabBar}>
-        {[
-          { id: "home", icon: appearance.appIcon || "🧠", label: t.home },
+        {[{ id: "home", icon: appearance.appIcon || "🧠", label: t.home },
           { id: "author", icon: "👤", label: t.author },
-          { id: "admin", icon: "⚙️", label: t.admin },
-        ].map((tab) => (
+          { id: "admin", icon: "⚙️", label: t.admin }].map((tab) => (
           <button key={tab.id} onClick={() => setScreen(tab.id)}
             style={{ ...s.tabButton, color: screen === tab.id ? appearance.colorPrimary : "#9CA3AF" }}>
             <span style={s.tabIcon}>{tab.icon}</span>
@@ -288,54 +261,41 @@ export default function App() {
   );
 }
 
-function HomeScreen({ messages, loading, activeTab, setActiveTab, setScreen, setSelectedMessage, showAddForm, setShowAddForm, newMsg, setNewMsg, handleAddMessage, editingMessage, setEditingMessage, appearance, grad, activeCats, getCat, t, LangSwitcher, translating }) {
+function HomeScreen({ messages, loading, translating, activeTab, setActiveTab, setScreen, setSelectedMessage, showAddForm, setShowAddForm, newMsg, setNewMsg, handleAddMessage, editingMessage, setEditingMessage, appearance, grad, activeCats, getCat, t, LangSwitcher }) {
   const filtered = activeTab === "todas" ? messages : messages.filter(m => m.category === activeTab);
   const cols = appearance.gridCols || 2;
-
   return (
     <div style={s.page}>
       <div style={s.homeHeader}>
         <div>
           <div style={{ ...s.appBadge, background: grad }}>
             <span style={{ fontSize: 18 }}>{appearance.appIcon || "🧠"}</span>
-            <span style={s.appBadgeText}>{appearance.appName || "IE & Liderança"}</span>
+            <span style={s.appBadgeText}>{appearance.appName}</span>
           </div>
-          {appearance.showSubtitle !== false && (
-            <p style={s.homeSubtitle}>{appearance.appSubtitle}</p>
-          )}
+          {appearance.showSubtitle !== false && <p style={s.homeSubtitle}>{appearance.appSubtitle}</p>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <LangSwitcher />
           <button onClick={() => { setShowAddForm(!showAddForm); setEditingMessage(null); setNewMsg({ title: "", content: "", category: activeCats[0]?.id || "autoconhecimento", icon: "💡" }); }}
-            style={{ ...s.addButton, background: grad }}>
-            {showAddForm ? "✕" : "+"}
-          </button>
+            style={{ ...s.addButton, background: grad }}>{showAddForm ? "✕" : "+"}</button>
         </div>
       </div>
 
       {showAddForm && (
         <div style={s.addForm}>
           <p style={s.formTitle}>{editingMessage ? t.editMessage : t.newMessage}</p>
-          <input style={s.formInput} placeholder={t.title} value={newMsg.title}
-            onChange={(e) => setNewMsg({ ...newMsg, title: e.target.value })} />
-          <textarea style={{ ...s.formInput, height: 80, resize: "none" }}
-            placeholder={t.content} value={newMsg.content}
-            onChange={(e) => setNewMsg({ ...newMsg, content: e.target.value })} />
-          <select style={{ ...s.formInput, marginBottom: 10 }} value={newMsg.category}
-            onChange={(e) => setNewMsg({ ...newMsg, category: e.target.value })}>
+          <input style={s.formInput} placeholder={t.titleLabel} value={newMsg.title} onChange={(e) => setNewMsg({ ...newMsg, title: e.target.value })} />
+          <textarea style={{ ...s.formInput, height: 80, resize: "none" }} placeholder={t.contentLabel} value={newMsg.content} onChange={(e) => setNewMsg({ ...newMsg, content: e.target.value })} />
+          <select style={{ ...s.formInput, marginBottom: 10 }} value={newMsg.category} onChange={(e) => setNewMsg({ ...newMsg, category: e.target.value })}>
             {activeCats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
           <div style={s.iconPicker}>
             {iconOptions.map(icon => (
               <button key={icon} onClick={() => setNewMsg({ ...newMsg, icon })}
-                style={{ ...s.iconOption, background: newMsg.icon === icon ? "#DBEAFE" : "transparent", borderColor: newMsg.icon === icon ? appearance.colorPrimary : "#E5E7EB" }}>
-                {icon}
-              </button>
+                style={{ ...s.iconOption, background: newMsg.icon === icon ? "#DBEAFE" : "transparent", borderColor: newMsg.icon === icon ? appearance.colorPrimary : "#E5E7EB" }}>{icon}</button>
             ))}
           </div>
-          <button onClick={handleAddMessage} style={{ ...s.saveButton, background: grad }}>
-            {editingMessage ? t.saveEdit : t.save}
-          </button>
+          <button onClick={handleAddMessage} style={{ ...s.saveButton, background: grad }}>{editingMessage ? t.saveEdit : t.save}</button>
         </div>
       )}
 
@@ -348,8 +308,10 @@ function HomeScreen({ messages, loading, activeTab, setActiveTab, setScreen, set
         ))}
       </div>
 
-      {loading || translating ? (
-        <div style={s.emptyBox}><p style={s.loadingText}>{loading ? t.loading : "⟳ Traduzindo..."}</p></div>
+      {loading ? (
+        <div style={s.emptyBox}><p style={s.loadingText}>{t.loading}</p></div>
+      ) : translating ? (
+        <div style={s.emptyBox}><p style={s.loadingText}>{t.translating}</p></div>
       ) : filtered.length === 0 ? (
         <div style={s.emptyBox}>
           <p style={s.emptyText}>{t.noMessages}</p>
@@ -360,23 +322,16 @@ function HomeScreen({ messages, loading, activeTab, setActiveTab, setScreen, set
           {filtered.map(msg => {
             const cat = getCat(msg.category);
             return (
-              <button key={msg.id} style={s.messageCard}
-                onClick={() => { setSelectedMessage(msg); setScreen("detail"); }}>
-                <div style={{ ...s.cardIconBg, background: (cat.color || msg.color) + "22" }}>
-                  <span style={s.cardIcon}>{msg.icon}</span>
-                </div>
+              <button key={msg.id} style={s.messageCard} onClick={() => { setSelectedMessage(msg); setScreen("detail"); }}>
+                <div style={{ ...s.cardIconBg, background: (cat.color || msg.color) + "22" }}><span style={s.cardIcon}>{msg.icon}</span></div>
                 <p style={s.cardTitle}>{msg.title}</p>
-                <span style={{ ...s.cardBadge, background: (cat.color || msg.color) + "22", color: cat.color || msg.color }}>
-                  {cat.label}
-                </span>
+                <span style={{ ...s.cardBadge, background: (cat.color || msg.color) + "22", color: cat.color || msg.color }}>{cat.label}</span>
               </button>
             );
           })}
         </div>
       )}
-      {appearance.showFooter !== false && (
-        <p style={s.footerNote}>{appearance.footerText}</p>
-      )}
+      {appearance.showFooter !== false && <p style={s.footerNote}>{appearance.footerText}</p>}
     </div>
   );
 }
@@ -396,12 +351,8 @@ function DetailScreen({ message, setScreen, handleDelete, handleEditMessage, isA
         )}
       </div>
       <div style={s.detailHero}>
-        <div style={{ ...s.detailIconBg, background: (cat.color || message.color) + "22" }}>
-          <span style={s.detailIcon}>{message.icon}</span>
-        </div>
-        <span style={{ ...s.detailBadge, background: (cat.color || message.color) + "22", color: cat.color || message.color }}>
-          {cat.label}
-        </span>
+        <div style={{ ...s.detailIconBg, background: (cat.color || message.color) + "22" }}><span style={s.detailIcon}>{message.icon}</span></div>
+        <span style={{ ...s.detailBadge, background: (cat.color || message.color) + "22", color: cat.color || message.color }}>{cat.label}</span>
       </div>
       <h1 style={s.detailTitle}>{displayed.title}</h1>
       <div style={s.detailCard}>
@@ -419,9 +370,7 @@ function DetailScreen({ message, setScreen, handleDelete, handleEditMessage, isA
 function AuthorScreen({ author, grad, appearance, t, LangSwitcher }) {
   return (
     <div style={s.page}>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-        <LangSwitcher />
-      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}><LangSwitcher /></div>
       <div style={s.authorHero}>
         <div style={{ ...s.authorAvatarBg, boxShadow: `0 8px 24px ${appearance.colorPrimary}33` }}>
           <span style={s.authorAvatar}>{author.avatar}</span>
@@ -432,11 +381,9 @@ function AuthorScreen({ author, grad, appearance, t, LangSwitcher }) {
         <p style={{ ...s.authorTitle, color: appearance.colorPrimary }}>{author.title}</p>
       </div>
       <div style={s.statsRow}>
-        {[
-          { label: author.stat1Label, value: author.stat1Value },
+        {[{ label: author.stat1Label, value: author.stat1Value },
           { label: author.stat2Label, value: author.stat2Value },
-          { label: author.stat3Label, value: author.stat3Value },
-        ].map(st => (
+          { label: author.stat3Label, value: author.stat3Value }].map(st => (
           <div key={st.label} style={s.statBox}>
             <p style={{ ...s.statValue, color: appearance.colorPrimary }}>{st.value}</p>
             <p style={s.statLabel}>{st.label}</p>
@@ -473,15 +420,14 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
 
   const handleLogin = () => {
     if (password === ADMIN_PASSWORD) { setIsAdmin(true); setError(""); }
-    else setError(t.wrongPassword);
+    else setError(t.wrongPass);
   };
 
   const saveData = async (type) => {
     if (type === "autor") await setDoc(doc(db, "config", "author"), editAuthor);
     if (type === "aparencia") await setDoc(doc(db, "config", "appearance"), editAppearance);
     if (type === "categorias") await setDoc(doc(db, "config", "categories"), { list: editCats });
-    setSaved(type);
-    setTimeout(() => setSaved(""), 2000);
+    setSaved(type); setTimeout(() => setSaved(""), 2000);
   };
 
   const addCategory = () => {
@@ -491,17 +437,12 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
     setNewCatLabel("");
   };
 
-  const toggleCat = (id) => setEditCats(editCats.map(c => c.id === id ? { ...c, active: !c.active } : c));
-  const removeCat = (id) => setEditCats(editCats.filter(c => c.id !== id));
-  const updateCatLabel = (id, label) => setEditCats(editCats.map(c => c.id === id ? { ...c, label } : c));
-  const updateCatColor = (id, color) => setEditCats(editCats.map(c => c.id === id ? { ...c, color } : c));
-
   if (!isAdmin) {
     return (
       <div style={s.page}>
         <div style={s.adminLoginBox}>
           <span style={{ fontSize: 52, marginBottom: 16, display: "block", textAlign: "center" }}>🔐</span>
-          <h2 style={s.adminLoginTitle}>{t.password}</h2>
+          <h2 style={s.adminLoginTitle}>{t.passwordTitle}</h2>
           <p style={s.adminLoginSub}>{t.passwordSub}</p>
           <input style={{ ...s.formInput, textAlign: "center", fontSize: 24, letterSpacing: 8 }}
             type="password" placeholder="••••" value={password}
@@ -547,17 +488,17 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
           {editCats.map(cat => (
             <div key={cat.id} style={{ background: cat.active !== false ? "#F8FAFC" : "#FFF5F5", borderRadius: 14, padding: 12, marginBottom: 10, border: `1.5px solid ${cat.active !== false ? "#E5E7EB" : "#FECACA"}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <input type="color" value={cat.color} onChange={(e) => updateCatColor(cat.id, e.target.value)}
+                <input type="color" value={cat.color} onChange={(e) => setEditCats(editCats.map(c => c.id === cat.id ? { ...c, color: e.target.value } : c))}
                   style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0 }} />
                 <input style={{ ...s.formInput, flex: 1, marginBottom: 0, fontSize: 14 }} value={cat.label}
-                  onChange={(e) => updateCatLabel(cat.id, e.target.value)} />
+                  onChange={(e) => setEditCats(editCats.map(c => c.id === cat.id ? { ...c, label: e.target.value } : c))} />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => toggleCat(cat.id)}
+                <button onClick={() => setEditCats(editCats.map(c => c.id === cat.id ? { ...c, active: !c.active } : c))}
                   style={{ ...s.categoryChip, flex: 1, fontSize: 12, padding: "6px 10px", background: cat.active !== false ? "#DCFCE7" : "#FEE2E2", color: cat.active !== false ? "#16a34a" : "#DC2626" }}>
                   {cat.active !== false ? "✅ Visível" : "🚫 Oculta"}
                 </button>
-                <button onClick={() => removeCat(cat.id)} style={{ ...s.deleteButton, padding: "6px 14px", fontSize: 13 }}>🗑 Remover</button>
+                <button onClick={() => setEditCats(editCats.filter(c => c.id !== cat.id))} style={{ ...s.deleteButton, padding: "6px 14px", fontSize: 13 }}>🗑 Remover</button>
               </div>
             </div>
           ))}
@@ -566,8 +507,7 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input type="color" value={newCatColor} onChange={(e) => setNewCatColor(e.target.value)}
                 style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0 }} />
-              <input style={{ ...s.formInput, flex: 1, marginBottom: 0 }} placeholder="Nome da categoria"
-                value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
+              <input style={{ ...s.formInput, flex: 1, marginBottom: 0 }} placeholder="Nome da categoria" value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
             </div>
             <button onClick={addCategory} style={{ ...s.saveButton, background: "#0EA5E9", fontSize: 14, padding: "10px" }}>Adicionar Categoria</button>
           </div>
@@ -579,14 +519,12 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
 
       {adminTab === "aparencia" && (
         <div style={s.addForm}>
-          <p style={s.formTitle}>🎨 Aparência da Tela Início</p>
+          <p style={s.formTitle}>🎨 Aparência</p>
           <p style={s.fieldLabel}>Ícone do App</p>
           <div style={{ ...s.iconPicker, marginBottom: 12 }}>
             {appIconOptions.map(ic => (
               <button key={ic} onClick={() => setEditAppearance({ ...editAppearance, appIcon: ic })}
-                style={{ ...s.iconOption, fontSize: 24, background: editAppearance.appIcon === ic ? "#DBEAFE" : "transparent", borderColor: editAppearance.appIcon === ic ? appearance.colorPrimary : "#E5E7EB" }}>
-                {ic}
-              </button>
+                style={{ ...s.iconOption, fontSize: 24, background: editAppearance.appIcon === ic ? "#DBEAFE" : "transparent", borderColor: editAppearance.appIcon === ic ? appearance.colorPrimary : "#E5E7EB" }}>{ic}</button>
             ))}
           </div>
           <p style={s.fieldLabel}>Nome do App</p>
@@ -597,23 +535,20 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
           <input style={s.formInput} value={editAppearance.footerText} onChange={(e) => setEditAppearance({ ...editAppearance, footerText: e.target.value })} />
           <p style={s.fieldLabel}>Cor Principal</p>
           <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
-            <input type="color" value={editAppearance.colorPrimary} onChange={(e) => setEditAppearance({ ...editAppearance, colorPrimary: e.target.value })}
-              style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
+            <input type="color" value={editAppearance.colorPrimary} onChange={(e) => setEditAppearance({ ...editAppearance, colorPrimary: e.target.value })} style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
             <input style={{ ...s.formInput, flex: 1, marginBottom: 0 }} value={editAppearance.colorPrimary} onChange={(e) => setEditAppearance({ ...editAppearance, colorPrimary: e.target.value })} />
           </div>
           <p style={s.fieldLabel}>Cor Secundária</p>
           <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
-            <input type="color" value={editAppearance.colorSecondary} onChange={(e) => setEditAppearance({ ...editAppearance, colorSecondary: e.target.value })}
-              style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
+            <input type="color" value={editAppearance.colorSecondary} onChange={(e) => setEditAppearance({ ...editAppearance, colorSecondary: e.target.value })} style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
             <input style={{ ...s.formInput, flex: 1, marginBottom: 0 }} value={editAppearance.colorSecondary} onChange={(e) => setEditAppearance({ ...editAppearance, colorSecondary: e.target.value })} />
           </div>
           <p style={s.fieldLabel}>Cor de Fundo</p>
           <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
-            <input type="color" value={editAppearance.bgColor} onChange={(e) => setEditAppearance({ ...editAppearance, bgColor: e.target.value })}
-              style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
+            <input type="color" value={editAppearance.bgColor} onChange={(e) => setEditAppearance({ ...editAppearance, bgColor: e.target.value })} style={{ width: 48, height: 48, borderRadius: 12, border: "none", cursor: "pointer" }} />
             <input style={{ ...s.formInput, flex: 1, marginBottom: 0 }} value={editAppearance.bgColor} onChange={(e) => setEditAppearance({ ...editAppearance, bgColor: e.target.value })} />
           </div>
-          <p style={s.fieldLabel}>Colunas dos Cards</p>
+          <p style={s.fieldLabel}>Colunas</p>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             {[1, 2, 3].map(n => (
               <button key={n} onClick={() => setEditAppearance({ ...editAppearance, gridCols: n })}
@@ -644,15 +579,14 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
           <div style={{ ...s.iconPicker, marginBottom: 12 }}>
             {avatarOptions.map(av => (
               <button key={av} onClick={() => setEditAuthor({ ...editAuthor, avatar: av })}
-                style={{ ...s.iconOption, fontSize: 26, width: 48, height: 48, background: editAuthor.avatar === av ? "#DBEAFE" : "transparent", borderColor: editAuthor.avatar === av ? appearance.colorPrimary : "#E5E7EB" }}>
-                {av}
-              </button>
+                style={{ ...s.iconOption, fontSize: 26, width: 48, height: 48, background: editAuthor.avatar === av ? "#DBEAFE" : "transparent", borderColor: editAuthor.avatar === av ? appearance.colorPrimary : "#E5E7EB" }}>{av}</button>
             ))}
           </div>
-          <p style={s.fieldLabel}>Nome</p>
-          <input style={s.formInput} value={editAuthor.name} onChange={(e) => setEditAuthor({ ...editAuthor, name: e.target.value })} />
-          <p style={s.fieldLabel}>Título / Cargo</p>
-          <input style={s.formInput} value={editAuthor.title} onChange={(e) => setEditAuthor({ ...editAuthor, title: e.target.value })} />
+          {[["Nome", "name"], ["Título / Cargo", "title"]].map(([label, key]) => (
+            <div key={key}><p style={s.fieldLabel}>{label}</p>
+              <input style={s.formInput} value={editAuthor[key]} onChange={(e) => setEditAuthor({ ...editAuthor, [key]: e.target.value })} />
+            </div>
+          ))}
           <p style={s.fieldLabel}>Bio</p>
           <textarea style={{ ...s.formInput, height: 100, resize: "none" }} value={editAuthor.bio} onChange={(e) => setEditAuthor({ ...editAuthor, bio: e.target.value })} />
           <p style={s.fieldLabel}>Missão</p>
@@ -679,9 +613,7 @@ function AdminScreen({ isAdmin, setIsAdmin, author, appearance, categories, mess
             return (
               <div key={msg.id} style={s.adminMsgCard}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, overflow: "hidden" }}>
-                  <div style={{ ...s.cardIconBg, width: 44, height: 44, flexShrink: 0, background: (cat.color || msg.color) + "22" }}>
-                    <span style={{ fontSize: 22 }}>{msg.icon}</span>
-                  </div>
+                  <div style={{ ...s.cardIconBg, width: 44, height: 44, flexShrink: 0, background: (cat.color || msg.color) + "22" }}><span style={{ fontSize: 22 }}>{msg.icon}</span></div>
                   <div style={{ overflow: "hidden" }}>
                     <p style={{ ...s.cardTitle, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.title}</p>
                     <span style={{ ...s.cardBadge, background: (cat.color || msg.color) + "22", color: cat.color || msg.color }}>{cat.label}</span>
@@ -705,8 +637,7 @@ const s = {
   screen: { flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" },
   tabBar: { height: 80, background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "space-around", alignItems: "flex-start", paddingTop: 10, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" },
   tabButton: { display: "flex", flexDirection: "column", alignItems: "center", background: "none", border: "none", cursor: "pointer", gap: 3, padding: "0 20px" },
-  tabIcon: { fontSize: 24 },
-  tabLabel: { fontSize: 11, fontWeight: 600 },
+  tabIcon: { fontSize: 24 }, tabLabel: { fontSize: 11, fontWeight: 600 },
   page: { padding: "20px 20px 32px" },
   homeHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 },
   appBadge: { display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 20, padding: "6px 14px", marginBottom: 6 },
@@ -715,7 +646,6 @@ const s = {
   addButton: { width: 44, height: 44, borderRadius: 22, border: "none", color: "#fff", fontSize: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   langSwitcher: { display: "flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.9)", borderRadius: 20, padding: "4px 8px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" },
   langBtn: { background: "none", border: "none", fontSize: 22, cursor: "pointer", padding: "2px 4px", borderRadius: 8, transition: "all 0.2s" },
-  translatingDot: { fontSize: 14, color: "#6B7280", animation: "spin 1s linear infinite" },
   addForm: { background: "#fff", borderRadius: 20, padding: 16, marginBottom: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" },
   formTitle: { fontWeight: 700, fontSize: 16, color: "#111", margin: "0 0 12px" },
   fieldLabel: { fontSize: 12, fontWeight: 700, color: "#6B7280", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: 0.5 },
